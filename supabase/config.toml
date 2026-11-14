@@ -1,0 +1,30 @@
+# Local CLI identifier only; NOT a remote Supabase project reference.
+project_id = "repairpassport"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173/auth/callback"]
+
+[functions.passport]
+# Anonymous buyer action; all mutations validate the session via Auth getUser.
+verify_jwt = false
+
+[functions.support-lookup]
+# Explicit getUser verification inside the function, including new publishable-key clients.
+verify_jwt = false
+
+[storage]
+enabled = true
+file_size_limit = "10MiB"
