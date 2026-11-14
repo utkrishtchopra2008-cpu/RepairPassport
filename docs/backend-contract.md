@@ -98,3 +98,7 @@ Appliance row is locked before invitations/mutations/acceptance. Acceptance vali
 ## Coordinator status
 
 Project values, real deployed origin, Firebase build output, frontend commit and manufacturer page are pending. No deployment or live two-account verification claimed. `firebase.json` will target `dist` only if frontend confirms Vite; otherwise update hosting output explicitly with coordinator agreement. No resource creation/reset is authorized or necessary. Backend setup and executable security checks live under `supabase/` and `docs/backend-setup.md`.
+
+## Explicit v1 integration clarification (2026-11-15)
+
+Firebase project has been recovered from the earlier setup as `repairpassport-utkrisht` and `.firebaserc` now reuses it. Its expected URL is `https://repairpassport-utkrisht.web.app`; not yet deployed. Actual Supabase browser-safe values remain pending. Hosting output `dist` still needs frontend build confirmation. HTTP 405 covers method misuse; infrastructure outages can return 502/503 with the same `INTERNAL_ERROR` envelope. No table, action, field or response shape changed. Storage policy accommodates pre-upload MIME/contentLength probes and validates supplied final MIME/size; the client upload sequence is unchanged.
