@@ -1,0 +1,85 @@
+name: Deploy Supabase backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/supabase-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repairpassport-supabase-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_PROJECT_REF: xhkjqtknjwxzbabnirsy
+      SUPABASE_URL: https://xhkjqtknjwxzbabnirsy.supabase.co
+      SITE_URL: https://repairpassport-utkrisht.web.app
+      SUPABASE_PUBLISHABLE_KEY: sb_publishable_GMzffjY8O-TMFye4RtLJmQ_WjsOO2Yc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: supabase/package-lock.json
+      - name: Install backend test dependencies
+        run: npm ci --prefix supabase --ignore-scripts
+      - name: Test backend
+        run: npm test --prefix supabase
+      - name: Check backend types
+        run: npm run typecheck --prefix supabase
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Require deployment credentials
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          test -n "$SUPABASE_ACCESS_TOKEN" || { echo 'Add SUPABASE_ACCESS_TOKEN in repository Actions secrets.'; exit 1; }
+          test -n "$SUPABASE_DB_PASSWORD" || { echo 'Add SUPABASE_DB_PASSWORD in repository Actions secrets.'; exit 1; }
+      - name: Inspect existing project and reject schema collisions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node supabase/scripts/ci-preflight.mjs
+      - name: Link existing project and apply additive migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          supabase link --project-ref "$SUPABASE_PROJECT_REF"
+          supabase migration list
+          supabase db push --dry-run
+          supabase db push --yes
+      - name: Set server-side function secrets
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          TINYFISH_API_KEY: ${{ secrets.TINYFISH_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+        run: node supabase/scripts/ci-secrets.mjs
+      - name: Configure exact Auth redirects, preserving existing settings
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node supabase/scripts/configure-auth.mjs
+      - name: Deploy three backend functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions deploy passport --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy support-lookup --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy repair-assistant --project-ref "$SUPABASE_PROJECT_REF"
+      - name: Verify public catalogue and deployed CORS
+        run: node supabase/scripts/ci-verify.mjs

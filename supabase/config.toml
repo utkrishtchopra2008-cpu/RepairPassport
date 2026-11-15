@@ -28,3 +28,7 @@ verify_jwt = false
 [storage]
 enabled = true
 file_size_limit = "10MiB"
+
+[functions.repair-assistant]
+# Public catalogue; ownership and session verification enforced for assessment and shop search.
+verify_jwt = false

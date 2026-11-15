@@ -129,3 +129,26 @@ export async function rpc(name: string, args: ObjectValue, authorization: string
   }
   return data;
 }
+
+// Column allowlist avoids reading receipts, serial numbers, nicknames or previous-owner data.
+export async function ownedAppliance(id: string, authorization: string, deps: Dependencies):Promise<{id:string;brand:string;model:string;category:string}> {
+  uuid(id);
+  const {url,key}=config(deps.env);
+  let result:Response;
+  try{
+    result=await deps.fetch(`${url}/rest/v1/appliances?select=id,brand,model,category&id=eq.${encodeURIComponent(id)}&limit=1`,{
+      headers:{apikey:key,Authorization:authorization},redirect:'error',signal:AbortSignal.timeout(8000),
+    });
+  }catch{throw new ApiError(503,'INTERNAL_ERROR','Database service unavailable');}
+  let data:unknown;
+  try{data=JSON.parse(await boundedText(result,16384));}catch{throw new ApiError(502,'INTERNAL_ERROR','Database service returned an invalid response');}
+  if(!result.ok){
+    if(result.status===401)throw new ApiError(401,'UNAUTHENTICATED','Session expired or invalid');
+    if(result.status===403)throw new ApiError(403,'FORBIDDEN','Action not permitted');
+    throw new ApiError(503,'INTERNAL_ERROR','Appliance context unavailable');
+  }
+  if(!Array.isArray(data)||data.length!==1)throw new ApiError(404,'NOT_FOUND','Record or link unavailable');
+  const row=data[0];object(row);
+  if(typeof row.id!=='string'||row.id.toLowerCase()!==id.toLowerCase()||typeof row.brand!=='string'||typeof row.model!=='string'||typeof row.category!=='string')throw new ApiError(502,'INTERNAL_ERROR','Database service returned an invalid response');
+  return {id:row.id,brand:row.brand,model:row.model,category:row.category};
+}

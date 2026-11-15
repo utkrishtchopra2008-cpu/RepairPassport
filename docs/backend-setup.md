@@ -4,7 +4,7 @@
 
 Branch: `backend-mvp`. The initial GitHub main contained only README.md (`cdaa9b9`); no Supabase schema, Firebase config, build files, workflow or credentials were published. Earlier Firebase setup identifies **repairpassport-utkrisht** as the intended project; `.firebaserc` reuses that ID. Its expected default URL is https://repairpassport-utkrisht.web.app; a read-only check returned 404 before deployment. This is an expected target URL, **not a completed deployment**.
 
-The Supabase project reference, URL and public key are not yet available here. Connect the existing Supabase/Firebase accounts or authenticate their CLIs locally; do not create replacement projects. Never paste a service-role key, TinyFish key, database password, Firebase CI token or Supabase access token in chat or commit one. No service-role credential is needed by the application functions.
+The existing Supabase project is `xhkjqtknjwxzbabnirsy` at https://xhkjqtknjwxzbabnirsy.supabase.co. Its publishable key is verified and listed in the backend contract. Email/password is enabled with email confirmation required. Read-only checks show the appliances API and passport function are not yet deployed. The TinyFish credential is stored only in the ignored, owner-readable local `supabase/.env`, with the manufacturer page left blank until approved. Project management access is not yet available here. Connect the existing Supabase/Firebase accounts or authenticate their CLIs locally; do not create replacement projects. Never paste a service-role key, TinyFish key, database password, Firebase CI token or Supabase access token in chat or commit one. No service-role credential is needed by the application functions.
 
 Frontend owns `src/`, `public/`, `index.html`, root package/build config and workflows. Backend changes only `supabase/`, `firebase.json`, `.firebaserc`, and backend docs. Contract: [backend-contract.md](backend-contract.md). Frozen API is the integration source of truth.
 
@@ -68,7 +68,7 @@ This script inspects the current config, preserves old redirect entries and all 
 
 ## Coordinator / frontend handoff
 
-Send the contract URL and these **browser-safe** values from the intended project:
+The confirmed **browser-safe** values are in the backend contract. Configure these names on the frontend and in its build environment:
 
 ```dotenv
 VITE_SUPABASE_URL=https://<existing-project-ref>.supabase.co
@@ -116,4 +116,85 @@ Manual finish: refresh the frontend and check persistence; generate a buyer QR a
 ## Contract clarification log
 
 - v1 clarification: HTTP method misuse returns 405; external Auth/DB outages may return 502/503. Same `{error:{code,message}}` format; no schema/action/field changes. Frontend should display the safe message and allow retry. These statuses extend the original listed infrastructure error statuses.
-- Firebase project resolved to existing `repairpassport-utkrisht` from earlier setup. Build-output confirmation, actual Supabase browser-safe values and deployed-origin Auth changes remain pending.
+- Firebase project resolved to existing `repairpassport-utkrisht` from earlier setup. Supabase project/public configuration is now confirmed in the contract. Build-output confirmation, management access and deployed-origin Auth changes remain pending.
+
+## Revised product backend (v2)
+
+The new `repair-assistant` function extends the product without changing the seven-table schema or existing passport actions. Deploy it in addition to both original functions:
+
+```sh
+supabase functions deploy repair-assistant --project-ref xhkjqtknjwxzbabnirsy
+```
+
+The full v2 request/response contract is appended to `docs/backend-contract.md`. Public actions: `list_products`, `resolve_product`, `components`. Owner-only actions: `assess`, `find_shops`. Component IDs are stable for diagram highlighting. Exact first model: Samsung `WW80T504DAN1TL`; a base model without confirmed variant yields `variant_required`. Descriptions/connections are an illustrative subsystem overview, not an exact parts catalogue. Primary references are listed in `supabase/functions/_shared/catalog.ts`; generic manufacturer guidance is distinguished from exact model identity.
+
+Frontend integration sequence:
+
+```js
+// Anonymous catalogue and component information:
+const catalogue = await supabase.functions.invoke('repair-assistant', {
+  body: {action: 'list_products', payload: {}}
+});
+const overview = await supabase.functions.invoke('repair-assistant', {
+  body: {action: 'components', payload: {product_id: 'samsung-ww80t504dan1tl'}}
+});
+// Use the existing passport function to create the selected appliance:
+const created = await supabase.functions.invoke('passport', {
+  body: {action: 'appliance_create', payload: {brand: 'Samsung', model: 'WW80T504DAN1TL'}}
+});
+// invoke returns a Supabase transport wrapper around our response envelope:
+const applianceId = created.data.data.id; // first check created.error and any response error
+const assessment = await supabase.functions.invoke('repair-assistant', {
+  body: {action: 'assess', payload: {
+    appliance_id: applianceId, symptoms: 'Water remains after the cycle', scenario: 'no_drain',
+    answers: {hazard_present: 'no', water_remaining: 'yes', drain_hose_kinked: 'no', filter_condition: 'clear'}
+  }}
+});
+// Render returned questions/options and collect the user's actual observations.
+// To save the original reported problem, submit assessment.data.data.repair_request
+// as payload to passport.request_create. Candidates and answers remain transient.
+```
+
+The assessment engine is `curated_rules_v1`, with `is_ai_generated:false`. It handles drainage, spinning and vibration using real backend rules and follow-up answers; this is not a generative-AI integration. Unknown/ambiguous problems remain unknown. Observed electrical hazards suppress ordinary checks and route to professional help. Manufacturer reference retrieval through TinyFish remains a separate live API integration; it does not prove a diagnosis. A general-purpose LLM and arbitrary-product research are not configured and must not be implied by the frontend.
+
+`support-lookup` now uses the supported model's fixed official Samsung URL if the server override is blank; no need to guess a destination. The existing secret stays server-side. One local live TinyFish Fetch attempt reached its 12-second deadline and a public-demo-area Overpass probe reached its 10-second deadline; the key/provider response has not been independently validated by that attempt. Do not report it as a successful live lookup. Failures remain useful `unavailable` states; there are no automatic retries.
+
+Nearby repair uses OpenStreetMap/Overpass, not invented shop fixtures or TinyFish-generated business claims. Ask the user to explicitly search an approximate area before sending it to Overpass. Raw coordinates are not persisted and are rounded before transmission; distances are calculated server-side. Only explicit repair-brand tags establish listed brand support, and part stock/authorization stay unknown. Lists may legitimately be empty because OSM is incomplete. Show source attribution and the contact-to-confirm notice. No Nominatim/geocoding service or maps API key has been added. Locality input must be resolved through an independently agreed provider or map selection; this backend currently accepts approved coordinates only.
+
+The shared lookup cooldown is per appliance, so manufacturer and uncached shop requests within 60 seconds may conflict. Return the safe rate-limit state; avoid eager parallel requests or background polling. The small in-memory shop cache is only for low-volume demos. Test code checks cached ownership, unknown fields, filtering, distance ordering, malicious contact fields and provider failures. It does not establish production throughput or comprehensive repair coverage.
+
+The updated live smoke script also checks anonymous component retrieval and owner-scoped assessment before and after transfer. It intentionally avoids calling external listing/TinyFish providers in every smoke run. The real two-account hosted script and physical QR checks still need deployed functions and confirmed test accounts.
+
+## Optional AI review (v2.1)
+
+An optional structured generative-model review is now implemented behind `repair-assistant` action `ai_review`. This adds AI-assisted ranking of existing evidence-backed hypotheses; it does not generate an arbitrary product's complete internals or establish a diagnosis. The ordinary `assess` action remains deterministic and available independently. The full additive payload/response contract is in `docs/backend-contract.md`.
+
+Set server-only `OPENAI_API_KEY` and an explicitly chosen `OPENAI_MODEL` supporting Responses and strict structured outputs in the ignored secrets file, then deploy the updated `repair-assistant`. There is no guessed model default, no frontend key, and no live AI success claimed without configured credentials. The implementation uses the [official Responses structured-output format](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses) and [response-storage setting](https://developers.openai.com/api/docs/guides/migrate-to-responses).
+
+Frontend requests `ai_review` only after explaining the OpenAI processing of structured observations and receiving consent. Payload: the ordinary assessment payload plus `ai_consent:true`. Response: `{data:{assessment,ai_review}}`. The nested `assessment` is unchanged and should remain visible if `ai_review.status` is skipped/unavailable. Show `is_ai_generated:true` only on a valid reviewed response, display its uncertainty, and retain all original hypotheses; a model's ordering can be wrong. No raw symptom/error-code free text, account/appliance IDs, serials, files or coordinates are sent to the provider.
+
+The model receives a fixed projection of product identity, enum answers and curated hypothesis evidence. It returns candidate IDs, evidence indexes and uncertainty under a strict JSON schema; server validation additionally rejects missing/duplicate/unknown IDs, invalid indexes and extra properties. Returned evidence/source text is mapped from the existing server catalogue rather than model-authored instructions. This constrains the output but does not prove the ranking correct.
+
+Eligible configured requests share the existing 60-second appliance lookup cooldown with TinyFish and uncached shop searches. The fixed provider endpoint gets one request, a 12-second deadline, at most 800 output tokens and a 64-KiB response cap; no retries. `store:false` disables response-object storage, not every form of provider retention. Tests mock the provider and verify projection, validation, rate limits, refusal, incomplete outputs, errors and timeouts. Missing keys cannot be replaced with a ChatGPT login, Supabase publishable key or TinyFish key.
+
+## Deploy directly from GitHub — no ChatGPT browser sign-in
+
+This is now the preferred connection route. `.github/workflows/supabase-backend.yml` deploys the existing Supabase project `xhkjqtknjwxzbabnirsy` when backend changes reach `main`, or when manually run from `main`. It does not sign in through ChatGPT, create a new project, reset the database or deploy the frontend. This backend workflow is added specifically for the requested repository connection; it does not replace the frontend teammate's Firebase workflow.
+
+One-time setup in YOUR browser:
+
+1. Open your normal signed-in Supabase dashboard. Under your account's Access Tokens, create a token with access to the existing project. This is a management access token, NOT the browser publishable key or service-role key.
+2. In the GitHub repository, open **Settings → Secrets and variables → Actions → New repository secret**.
+3. Add `SUPABASE_ACCESS_TOKEN` containing that management token.
+4. Add `SUPABASE_DB_PASSWORD` containing this existing project's database password. Keep the current password; do not reset it just to proceed.
+5. Add `TINYFISH_API_KEY` containing your TinyFish key. This is needed for successful live reference retrieval, not for the core passport deployment.
+6. Optionally add secret `OPENAI_API_KEY` and Actions variable `OPENAI_MODEL` for the optional AI review. Without these, the rule-based assessment still works and AI review accurately reports not configured.
+7. Once the backend workflow is on `main`, use **Actions → Deploy Supabase backend → Run workflow**, selecting `main`. Subsequent pushes of backend changes to `main` trigger it automatically.
+
+Never paste these secret values into chat, source files, workflow YAML, comments or build logs. This assistant's repository connector cannot write repository Actions secrets; the one-time entry must be done in your browser. The existing browser-safe Supabase project URL/key are already configured in the workflow. No service-role credential is requested.
+
+The workflow runs tests/types first. It uses the official Supabase CLI action, performs a read-only schema/history preflight, links the existing project, shows the migration dry run and applies pending additive migrations. If resource names already exist without the expected migration history, it stops; reconcile the actual schema rather than resetting data or repairing history blindly. It updates only supplied optional provider secrets (missing values preserve existing remote values), sets exact function origins, adds Auth redirects while preserving existing settings, deploys `passport`, `support-lookup`, and `repair-assistant`, and checks the public catalogue and CORS.
+
+The Supabase CLI is selected by the official setup action's latest release. If a future CLI changes flags, update the workflow after inspecting its error; do not bypass failed migration checks. Deployment is serialized and limited to `main`; no pull-request code receives deployment credentials. Credential environment variables are scoped to the steps that need them. The secrets step suppresses CLI output and deletes its temporary secrets file. Two-account checks remain a separate acceptance test and are not implied by the public catalogue check.
+
+Connection status: workflow code prepared, but repository secrets and a successful Actions deployment have NOT been verified. Once a run succeeds, check its actual logs and then complete the two-account smoke test. Firebase/frontend deployment remains separate until the frontend branch is committed and integrated.

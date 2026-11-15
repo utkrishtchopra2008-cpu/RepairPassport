@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/database.test.mjs && node --import tsx --test tests/functions.test.ts",
-    "typecheck": "tsc --noEmit --target ES2022 --module ESNext --moduleResolution bundler --allowImportingTsExtensions --lib ES2022,DOM,DOM.Iterable functions/_shared/*.ts functions/passport/index.ts functions/support-lookup/index.ts tests/deno.d.ts"
+    "test": "node --test tests/database.test.mjs && node --import tsx --test tests/functions.test.ts tests/assistant.test.ts tests/ai-review.test.ts",
+    "typecheck": "tsc --noEmit --target ES2022 --module ESNext --moduleResolution bundler --allowImportingTsExtensions --lib ES2022,DOM,DOM.Iterable functions/_shared/*.ts functions/passport/index.ts functions/support-lookup/index.ts functions/repair-assistant/index.ts tests/deno.d.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.16",

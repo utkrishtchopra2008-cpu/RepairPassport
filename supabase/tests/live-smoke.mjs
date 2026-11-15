@@ -33,7 +33,19 @@ async function rows(table,query,session){
  const r=await call(`/rest/v1/${table}?${query}`,undefined,session,{method:'GET'});
  assert.equal(r.status,200,`Read ${table} failed`);return r.value;
 }
-const appliance=await action('appliance_create',{brand:'Demo',model:`Smoke-${Date.now()}`,nickname:'Integration smoke test'});
+async function assistant(name,payload,session=owner,status=200){
+ const r=await call('/functions/v1/repair-assistant',{action:name,payload},session);
+ assert.equal(r.status,status,`${name}: ${JSON.stringify(r.value)}`);return r.value.data;
+}
+const catalogue=await assistant('list_products',{},null);
+assert.equal(catalogue.products[0].full_model,'WW80T504DAN1TL');
+const overview=await assistant('components',{product_id:catalogue.products[0].id},null);
+assert.equal(overview.diagram.exact_geometry,false);
+const appliance=await action('appliance_create',{brand:'Samsung',model:'WW80T504DAN1TL',nickname:`Integration smoke ${Date.now()}`});
+const assessmentInput={appliance_id:appliance.id,symptoms:'Water remains after the cycle',scenario:'no_drain',answers:{hazard_present:'no',water_remaining:'yes',drain_hose_kinked:'no',filter_condition:'clear'}};
+const assessment=await assistant('assess',assessmentInput);
+assert.equal(assessment.status,'possible_causes');assert.equal(assessment.is_ai_generated,false);
+await assistant('assess',assessmentInput,recipient,404);
 const refreshed=await login(env.RP_OWNER_EMAIL,env.RP_OWNER_PASSWORD);
 assert.equal((await rows('appliances',`id=eq.${appliance.id}&select=*`,refreshed)).length,1);
 assert.equal((await rows('appliances',`id=eq.${appliance.id}&select=*`,recipient)).length,0);
@@ -62,6 +74,8 @@ assert.equal(preflight.status,204);assert.equal(preflight.headers.get('Access-Co
 const invitation=await action('transfer_invite',{appliance_id:appliance.id,recipient_email:env.RP_RECIPIENT_EMAIL});
 const accepted=await action('transfer_accept',{token:invitation.token},recipient);
 assert.equal(accepted.status,'accepted');
+await assistant('assess',assessmentInput,owner,404);
+assert.equal((await assistant('assess',assessmentInput,recipient)).status,'possible_causes');
 await action('transfer_accept',{token:invitation.token},recipient,409);
 await action('buyer_summary',{token:share.token},null,404);
 await action('event_append',{appliance_id:appliance.id,event_type:'repair',title:'Must fail',occurred_on:new Date().toISOString().slice(0,10)},owner,404);
@@ -73,4 +87,4 @@ assert.notEqual((await call(path,undefined,owner,{method:'GET'})).status,200);
 assert.notEqual((await call(path,undefined,recipient,{method:'GET'})).status,200);
 const old=await call('/rest/v1/appliances?id=eq.'+appliance.id,{owner_id:owner.user.id},recipient,{method:'PATCH'});
 assert.notEqual(old.status,200);assert.notEqual(old.status,204);
-console.log(JSON.stringify({status:'passed',appliance_id:appliance.id,working:['persistence across reauthentication','private row/document isolation','anonymous buyer API','buyer SPA fallback','deployed CORS','structured unknown quote fields','single-use transfer','old owner denied','history retained','old shares revoked'],manual_checks_remaining:['scan buyer QR on another device','frontend refresh/logout/session flow','Auth confirmation callback']},null,2));
+console.log(JSON.stringify({status:'passed',appliance_id:appliance.id,working:['persistence across reauthentication','private row/document isolation','anonymous buyer API','buyer SPA fallback','deployed CORS','structured unknown quote fields','public component catalogue','owner-scoped guided assessment','single-use transfer','old owner denied','history retained','old shares revoked'],manual_checks_remaining:['scan buyer QR on another device','frontend refresh/logout/session flow','Auth confirmation callback']},null,2));
