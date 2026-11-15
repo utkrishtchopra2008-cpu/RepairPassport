@@ -4,7 +4,7 @@
 
 Branch: `backend-mvp`. The initial GitHub main contained only README.md (`cdaa9b9`); no Supabase schema, Firebase config, build files, workflow or credentials were published. Earlier Firebase setup identifies **repairpassport-utkrisht** as the intended project; `.firebaserc` reuses that ID. Its expected default URL is https://repairpassport-utkrisht.web.app; a read-only check returned 404 before deployment. This is an expected target URL, **not a completed deployment**.
 
-The Supabase project reference, URL and public key are not yet available here. Connect the existing Supabase/Firebase accounts or authenticate their CLIs locally; do not create replacement projects. Never paste a service-role key, TinyFish key, database password, Firebase CI token or Supabase access token in chat or commit one. No service-role credential is needed by the application functions.
+The existing Supabase project is `xhkjqtknjwxzbabnirsy` at https://xhkjqtknjwxzbabnirsy.supabase.co. Its publishable key is verified and listed in the backend contract. Email/password is enabled with email confirmation required. Read-only checks show the appliances API and passport function are not yet deployed. The TinyFish credential is stored only in the ignored, owner-readable local `supabase/.env`, with the manufacturer page left blank until approved. Project management access is not yet available here. Connect the existing Supabase/Firebase accounts or authenticate their CLIs locally; do not create replacement projects. Never paste a service-role key, TinyFish key, database password, Firebase CI token or Supabase access token in chat or commit one. No service-role credential is needed by the application functions.
 
 Frontend owns `src/`, `public/`, `index.html`, root package/build config and workflows. Backend changes only `supabase/`, `firebase.json`, `.firebaserc`, and backend docs. Contract: [backend-contract.md](backend-contract.md). Frozen API is the integration source of truth.
 
@@ -68,7 +68,7 @@ This script inspects the current config, preserves old redirect entries and all 
 
 ## Coordinator / frontend handoff
 
-Send the contract URL and these **browser-safe** values from the intended project:
+The confirmed **browser-safe** values are in the backend contract. Configure these names on the frontend and in its build environment:
 
 ```dotenv
 VITE_SUPABASE_URL=https://<existing-project-ref>.supabase.co
@@ -116,4 +116,4 @@ Manual finish: refresh the frontend and check persistence; generate a buyer QR a
 ## Contract clarification log
 
 - v1 clarification: HTTP method misuse returns 405; external Auth/DB outages may return 502/503. Same `{error:{code,message}}` format; no schema/action/field changes. Frontend should display the safe message and allow retry. These statuses extend the original listed infrastructure error statuses.
-- Firebase project resolved to existing `repairpassport-utkrisht` from earlier setup. Build-output confirmation, actual Supabase browser-safe values and deployed-origin Auth changes remain pending.
+- Firebase project resolved to existing `repairpassport-utkrisht` from earlier setup. Supabase project/public configuration is now confirmed in the contract. Build-output confirmation, management access and deployed-origin Auth changes remain pending.

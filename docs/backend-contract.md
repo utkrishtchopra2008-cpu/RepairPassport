@@ -4,7 +4,14 @@ Frozen integration contract for `backend-mvp`. Any change requires an explicit n
 
 ## Frontend configuration
 
-For Vite React, use `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` with `createClient(url, key)`. These two values are browser-safe; real values are pending project configuration. Do not use a service-role/secret key in the browser. If the frontend uses another build tool, report it before adapting names. Firebase Hosting serves the build; no Firebase SDK is needed for authentication.
+For Vite React, use `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` with `createClient(url, key)`. These two values are browser-safe. The existing project was confirmed with a successful read of its Auth settings; use the following build-time configuration: Do not use a service-role/secret key in the browser. If the frontend uses another build tool, report it before adapting names. Firebase Hosting serves the build; no Firebase SDK is needed for authentication.
+
+```dotenv
+VITE_SUPABASE_URL=https://xhkjqtknjwxzbabnirsy.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_GMzffjY8O-TMFye4RtLJmQ_WjsOO2Yc
+```
+
+Existing Supabase project reference: `xhkjqtknjwxzbabnirsy`. Email/password is enabled; email confirmation is required. Read-only deployment checks returned `PGRST205` for `appliances` and 404 for `passport`; migrations/functions still need deployment using project management access. These checks did not read private records or modify the database.
 
 Required client routes: `/buyer#token=<64 hex characters>` and `/transfer#token=<64 hex characters>`. Read token from URL fragment (not query string); remove it from browser history after retaining it in memory/sessionStorage. Never log tokens. Buyer link needs no login; transfer needs the intended recipient signed in with confirmed email. Preserve invitation across login. URLs are composed by the frontend using `window.location.origin`. Transfers are handed to the recipient by the owner; backend does not send email.
 
@@ -97,8 +104,8 @@ Appliance row is locked before invitations/mutations/acceptance. Acceptance vali
 
 ## Coordinator status
 
-Project values, real deployed origin, Firebase build output, frontend commit and manufacturer page are pending. No deployment or live two-account verification claimed. `firebase.json` will target `dist` only if frontend confirms Vite; otherwise update hosting output explicitly with coordinator agreement. No resource creation/reset is authorized or necessary. Backend setup and executable security checks live under `supabase/` and `docs/backend-setup.md`.
+Supabase browser-safe values are confirmed above. Supabase/Firebase management access, verified deployed origin, Firebase build output, frontend commit and manufacturer page are pending. No deployment or live two-account verification claimed. `firebase.json` will target `dist` only if frontend confirms Vite; otherwise update hosting output explicitly with coordinator agreement. No resource creation/reset is authorized or necessary. Backend setup and executable security checks live under `supabase/` and `docs/backend-setup.md`.
 
 ## Explicit v1 integration clarification (2026-11-15)
 
-Firebase project has been recovered from the earlier setup as `repairpassport-utkrisht` and `.firebaserc` now reuses it. Its expected URL is `https://repairpassport-utkrisht.web.app`; not yet deployed. Actual Supabase browser-safe values remain pending. Hosting output `dist` still needs frontend build confirmation. HTTP 405 covers method misuse; infrastructure outages can return 502/503 with the same `INTERNAL_ERROR` envelope. No table, action, field or response shape changed. Storage policy accommodates pre-upload MIME/contentLength probes and validates supplied final MIME/size; the client upload sequence is unchanged.
+Firebase project has been recovered from the earlier setup as `repairpassport-utkrisht` and `.firebaserc` now reuses it. Its expected URL is `https://repairpassport-utkrisht.web.app`; not yet deployed. Supabase browser-safe values are now confirmed above; management access is still pending. Hosting output `dist` still needs frontend build confirmation. HTTP 405 covers method misuse; infrastructure outages can return 502/503 with the same `INTERNAL_ERROR` envelope. No table, action, field or response shape changed. Storage policy accommodates pre-upload MIME/contentLength probes and validates supplied final MIME/size; the client upload sequence is unchanged.
