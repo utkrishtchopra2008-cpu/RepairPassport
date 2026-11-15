@@ -42,7 +42,7 @@ jobs:
         run: npm run typecheck --prefix supabase
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: v3.1.0
       - name: Require deployment credentials
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -60,9 +60,9 @@ jobs:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           supabase link --project-ref "$SUPABASE_PROJECT_REF"
-          supabase migration list
-          supabase db push --dry-run
-          supabase db push --yes
+          supabase migration list --remote
+          supabase db push --dry-run --remote
+          supabase db push --yes --remote
       - name: Set server-side function secrets
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -78,8 +78,8 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          supabase functions deploy passport --project-ref "$SUPABASE_PROJECT_REF"
-          supabase functions deploy support-lookup --project-ref "$SUPABASE_PROJECT_REF"
-          supabase functions deploy repair-assistant --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy passport --yes --remote="$SUPABASE_PROJECT_REF"
+          supabase functions deploy support-lookup --yes --remote="$SUPABASE_PROJECT_REF"
+          supabase functions deploy repair-assistant --yes --remote="$SUPABASE_PROJECT_REF"
       - name: Verify public catalogue and deployed CORS
         run: node supabase/scripts/ci-verify.mjs
