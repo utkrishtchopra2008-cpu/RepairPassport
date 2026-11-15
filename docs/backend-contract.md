@@ -109,3 +109,75 @@ Supabase browser-safe values are confirmed above. Supabase/Firebase management a
 ## Explicit v1 integration clarification (2026-11-15)
 
 Firebase project has been recovered from the earlier setup as `repairpassport-utkrisht` and `.firebaserc` now reuses it. Its expected URL is `https://repairpassport-utkrisht.web.app`; not yet deployed. Supabase browser-safe values are now confirmed above; management access is still pending. Hosting output `dist` still needs frontend build confirmation. HTTP 405 covers method misuse; infrastructure outages can return 502/503 with the same `INTERNAL_ERROR` envelope. No table, action, field or response shape changed. Storage policy accommodates pre-upload MIME/contentLength probes and validates supplied final MIME/size; the client upload sequence is unchanged.
+
+## v2 additive contract — product exploration, assessment and nearby repair (2026-11-15)
+
+This section explicitly extends v1. Existing tables, columns, grants, passport actions and response shapes remain unchanged. No new migration is needed for v2. Store the full model/variant code in the existing `appliances.model` (example `WW80T504DAN1TL`). Do not silently turn an unknown variant into an exact match. These additions are implemented on `backend-mvp`; hosted deployment remains subject to management access.
+
+New Edge Function: `repair-assistant`. Call `.functions.invoke('repair-assistant',{body:{action,payload}})`. Same `{data:...}` success and `{error:{code,message}}` failure envelopes, exact-origin CORS, 16-KiB body limit and safe errors as v1. Never expose TinyFish keys in frontend code. Catalogue actions are anonymous; `assess` and `find_shops` require a verified session and current ownership of `appliance_id`.
+
+| action | Exact payload | data |
+|---|---|---|
+| `list_products` | `{}` | `{products:[ProductSummary],catalog_version:'2026-11-15.1'}` |
+| `resolve_product` | `{brand:string,model:string,variant?:string|null}` | `{status:'supported',product:ProductSummary}` or `{status:'variant_required',supported_variants:['1TL'],message}` or `{status:'unsupported',message}` |
+| `components` | `{product_id:string}` | `{status:'supported',product:ProductSummary,diagram:{kind:'illustrative_component_map',exact_geometry:false,notice},components:[Component],connections:[{from,to,relationship}],sources:[Source]}`; unknown ID: `{status:'unsupported',message}` |
+| `assess` | `{appliance_id:uuid,symptoms:string,scenario?:'no_drain'|'no_spin'|'vibration'|'unknown',answers?:Answers,error_code?:string|null}` | Assessment below. `symptoms` 1–2000 chars, error code max 120. No free text is sent to TinyFish or shop provider. No automatic database write. |
+| `find_shops` | `{appliance_id:uuid,latitude:number,longitude:number,location_consent:true,radius_km?:integer,require_listed_brand?:boolean,require_listed_category?:boolean}` | ShopSearch below. Coordinates must be finite, within [-90,90]/[-180,180]; radius 1–10 km, default 5. Consent must be explicit true; show the user that the approximate search area is shared with the listing provider. |
+
+`ProductSummary`: `{id,brand,model,variant,full_model,category:'washing_machine',support_url,coverage:'curated_component_overview'}`. Initial exact model: Samsung WW80T504DAN, variant 1TL, full model WW80T504DAN1TL. Product identity is backed by Samsung India's model support page. Subsystem explanations come from manufacturer support guidance; this is NOT a complete bill of materials, replacement-parts catalogue, model-specific exploded drawing or compatibility guarantee. Unknown products are not substituted with this model.
+
+`Component`: `{id,name,function,common_symptoms:string[],inspection:'external_observation'|'technician_only',source_ids:string[]}`. Stable IDs for diagram selection/highlights: `drum`, `drain_hose`, `pump_filter`, `drain_pump`, `motor`, `door`, `control_panel`, `leveling_feet`, `shipping_bolts`, `detergent_drawer`. `Source`: `{id,title,url,scope:'model_identity'|'manufacturer_general_guidance'}`. Render sources as links, all content as plain text. Do not claim every internal subpart has been identified.
+
+`Answers` is an object of optional enum values. Omitted/`unknown` never means no:
+
+- `hazard_present`, `water_remaining`, `drain_hose_kinked`, `load_unbalanced`, `machine_level`, `shipping_bolts_removed`, `door_closed`, `spin_disabled`, `drum_moves_during_wash`: `'yes'|'no'|'unknown'`.
+- `filter_condition`: `'clear'|'blocked'|'not_checked'|'unknown'`.
+- Unknown keys/other values are rejected. Engine asks questions, does not supply answers on the user's behalf.
+
+Assessment:
+
+```ts
+{
+ status: 'needs_answers'|'possible_causes'|'professional_inspection'|'unsupported_product'|'insufficient_information',
+ engine: 'curated_rules_v1', is_ai_generated: false,
+ product: ProductSummary|null,
+ scenario: 'no_drain'|'no_spin'|'vibration'|'unknown',
+ questions: Array<{id,label,options:string[]}>,
+ candidates: Array<{id,component_ids:string[],summary,evidence:string[],missing_information:string[],recommendation:'check_setup'|'professional_inspection',source_ids:string[]}>,
+ safe_checks: string[], notices: string[], sources: Source[],
+ repair_request: {appliance_id,symptoms,error_code:string|null},
+ report: {user_observations:{symptoms,error_code,answers:Answers},assessment_label:'Possible causes — not a confirmed diagnosis'}
+}
+```
+
+For unrecognized/ambiguous symptoms, ask the user to select a scenario rather than guess. Error codes only help route to a scenario; they do not confirm a broken part. Smoke/sparks/burning/electrical-hazard observations suppress ordinary checks/candidates and require professional inspection. No live electrical tests, panel removal, safety bypasses, definite part-replacement instruction or invented probability. Read the exact model manual before any maintenance. Rules are real deterministic backend logic, NOT live generative AI or a hidden mock. Frontend must display the engine honestly. A separate LLM has not been configured; manufacturer reference retrieval is the live TinyFish capability.
+
+Assessment is transient and does not add a completed repair. To save a problem, pass `data.repair_request` to existing `passport.request_create`; only the original symptoms/error code are persisted. Answers/candidates are available for client-side report preview/export, not stored as verified history. Subsequent completed repairs use `event_append`. Buyer responses remain unchanged and contain no assessment data.
+
+ShopSearch:
+
+```ts
+{
+ status:'found'|'empty'|'unavailable',
+ reason?:'timeout'|'upstream_error'|'invalid_response',
+ shops:Array<{
+   id:string,name:string,address:string|null,phone:string|null,
+   latitude:number,longitude:number,distance_km:number,
+   distance_type:'straight_line_approximate',
+   category_support:'washing_machine_listed'|'appliance_repair_listed',
+   brand_support:'listed'|'unknown',parts_availability:'unknown',
+   verification:'community_listing_unverified',rating:null,
+   opening_hours:string|null,source_url:string,directions_url:string
+ }>,
+ search_area:{latitude:number,longitude:number,radius_km:number},
+ attribution:'© OpenStreetMap contributors (ODbL)',
+ attribution_url:'https://www.openstreetmap.org/copyright',
+ truncated:boolean,notice:string
+}
+```
+
+Live listings use one bounded HTTPS Overpass request to `https://overpass-api.de/api/interpreter`, fixed query templates and rounded (3 decimal) search coordinates. Exact coordinates are used only server-side for approximate straight-line distances, never persisted/logged or sent to TinyFish. Search radius does not establish service area. Query/response caps, 10-second HTTP deadline, 8-second Overpass query timeout, no automatic retries, max 20 returned shops. Results are distance-sorted among returned matching listings, not an exhaustive directory. Incomplete OSM coverage may legitimately return empty. Brand support requires explicit repair-brand tags, not the shop's name or ordinary sales-brand tags. Part stock and authorization are never inferred. Names/contact/hours are community-entered and unverified. No fabricated ratings, opening-now status or stock. Display attribution and “Contact to confirm service and parts availability.” A locality/postcode geocoder is NOT included; frontend must provide user-approved coordinates (location permission or map selection), not silently geocode through an unapproved service.
+
+A small bounded warm-instance public-listing cache reduces repeat upstream requests; cache is approximate-area based and not durable. A cache miss claims the same existing 60-second per-appliance lookup cooldown as `support-lookup`; the frontend must handle RATE_LIMITED. Cached searches still require current ownership. Never poll search/lookup endpoints in the background. This MVP is suitable for low-volume demos; high-traffic listing access needs a provider agreement or hosted infrastructure.
+
+`support-lookup` v2 clarification: for an exactly supported appliance, the catalogue provides the fixed Samsung manufacturer support URL when `MANUFACTURER_SUPPORT_URL` is unset. Explicit server overrides must still pass the existing support-URL allowlist. Unknown models with no approved override return `unavailable/not_configured`. It remains a single bounded TinyFish Fetch request returning reference text, not an assessment endpoint. All previous response shapes remain unchanged.
