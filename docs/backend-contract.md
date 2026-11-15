@@ -181,3 +181,34 @@ Live listings use one bounded HTTPS Overpass request to `https://overpass-api.de
 A small bounded warm-instance public-listing cache reduces repeat upstream requests; cache is approximate-area based and not durable. A cache miss claims the same existing 60-second per-appliance lookup cooldown as `support-lookup`; the frontend must handle RATE_LIMITED. Cached searches still require current ownership. Never poll search/lookup endpoints in the background. This MVP is suitable for low-volume demos; high-traffic listing access needs a provider agreement or hosted infrastructure.
 
 `support-lookup` v2 clarification: for an exactly supported appliance, the catalogue provides the fixed Samsung manufacturer support URL when `MANUFACTURER_SUPPORT_URL` is unset. Explicit server overrides must still pass the existing support-URL allowlist. Unknown models with no approved override return `unavailable/not_configured`. It remains a single bounded TinyFish Fetch request returning reference text, not an assessment endpoint. All previous response shapes remain unchanged.
+
+## v2.1 additive contract — optional structured AI review
+
+Explicit addition: `repair-assistant` accepts `action:'ai_review'`. Existing `assess` behavior/envelope stays unchanged. `ai_review` payload is the same as `assess`, plus required `ai_consent:true`. It requires a verified session and current appliance ownership. Before requesting it, frontend must explain that structured product/observation data is sent to OpenAI for review. No automatic calls or background polling.
+
+Response `data`: `{assessment:Assessment,ai_review:AIReview}`. `Assessment` is the unchanged v2 curated assessment. `AIReview`:
+
+```ts
+{
+ status:'reviewed'|'unavailable'|'skipped',
+ reason?:'not_configured'|'timeout'|'upstream_error'|'invalid_response'|'refused'|'incomplete_response'|'insufficient_assessment',
+ engine:'openai_structured_review',
+ is_ai_generated:boolean,
+ model?:string,
+ ranked_candidates:Array<{
+   candidate_id:string,
+   evidence:string[],
+   source_ids:string[],
+   uncertainty:'needs_inspection'|'insufficient_evidence'
+ }>,
+ notice:string
+}
+```
+
+This is AI-assisted prioritization of supplied hypotheses, NOT arbitrary-product research or confirmation of a failed part. A real LLM returns only candidate IDs, evidence indexes and uncertainty enums under strict structured output; the server maps them to existing text/source IDs. It cannot introduce components, repair instructions, prices or unvalidated free-form advice through this response. Its ordering may be wrong: show all original candidates and the uncertainty notice. `is_ai_generated:true` only after a valid live response; not-configured/error/skipped are false. Never relabel a rule-based fallback as successful AI.
+
+Server-only configuration: `OPENAI_API_KEY`, `OPENAI_MODEL` (must be an available Responses/structured-output-compatible model; no default is guessed). Fixed destination `https://api.openai.com/v1/responses`, one request, 12-second deadline, maximum 800 output tokens, 64-KiB upstream body, no retries, `store:false`. Only vetted product identity, scenario, enum answers and bounded curated candidate/evidence/source data are sent. Raw symptom text, error-code free text, names, user/appliance IDs, serials, invoices, coordinates and tokens are excluded. `store:false` is not a promise of zero provider retention. No browser API key. Valid reviewer output must contain each supplied candidate exactly once, valid evidence indexes and only the permitted uncertainty enums. Refused/incomplete/malformed/unknown-ID responses are rejected.
+
+Review is skipped for hazards, unsupported models, incomplete questions or absent candidates. Missing provider configuration returns `unavailable/not_configured` without making a paid request. Configured eligible requests claim the same existing 60-second per-appliance lookup cooldown as support/shop lookups; RATE_LIMITED remains an HTTP error. Provider failures preserve the full original assessment in the HTTP-200 response. No schema migration, automatic diagnosis-history write, new table or client-supplied attribution is added.
+
+Implementation uses the official Responses structured-output format. No provider key/model is currently configured; live AI review is not claimed until deployed credentials and an end-to-end check succeed.

@@ -1,3 +1,4 @@
+import { reviewAssessment } from '../_shared/ai-review.ts';
 import { authenticate, cors, exactKeys, failure, invalid, jsonBody, method, object, ownedAppliance, response, uuid, type Dependencies } from '../_shared/http.ts';
 import { catalogVersion, componentOverview, product, resolveProduct } from '../_shared/catalog.ts';
 import { assess, text, validateAnswers, scenarioIds } from '../_shared/assessment.ts';
@@ -25,9 +26,10 @@ export function createHandler(deps:Dependencies){
       if(body.action==='components'){
         exactKeys(p,['product_id']);return response(componentOverview(text(p.product_id,'product_id',100)!),headers);
       }
-      if(body.action!=='assess'&&body.action!=='find_shops')throw invalid('Unknown action');
-      if(body.action==='assess'){
-        exactKeys(p,['appliance_id','symptoms'],['scenario','answers','error_code']);
+      if(body.action!=='assess'&&body.action!=='ai_review'&&body.action!=='find_shops')throw invalid('Unknown action');
+      if(body.action==='assess'||body.action==='ai_review'){
+        exactKeys(p,body.action==='ai_review'?['appliance_id','symptoms','ai_consent']:['appliance_id','symptoms'],['scenario','answers','error_code']);
+        if(body.action==='ai_review'&&p.ai_consent!==true)throw invalid('Explicit AI review consent is required');
         uuid(p.appliance_id);text(p.symptoms,'symptoms',2000);validateAnswers(p.answers);
         if(p.error_code!==undefined)text(p.error_code,'error_code',120,true);
         if(p.scenario!==undefined&&(typeof p.scenario!=='string'||!(scenarioIds as readonly string[]).includes(p.scenario)))throw invalid('Unsupported scenario');
@@ -36,7 +38,11 @@ export function createHandler(deps:Dependencies){
       }
       const authorization=await authenticate(req,deps);
       const appliance=await ownedAppliance(p.appliance_id as string,authorization,deps);
-      if(body.action==='assess')return response(assess(appliance,p),headers);
+      if(body.action==='assess'||body.action==='ai_review'){
+        const assessment=assess(appliance,p);
+        if(body.action==='assess')return response(assessment,headers);
+        return response({assessment,ai_review:await reviewAssessment(assessment,appliance.id,authorization,deps)},headers);
+      }
       return response(await shops(validateShopQuery(p),appliance,authorization,deps),headers);
     }catch(error){return failure(error,headers);}
   };
