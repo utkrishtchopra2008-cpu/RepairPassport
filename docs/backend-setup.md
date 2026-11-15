@@ -176,3 +176,25 @@ Frontend requests `ai_review` only after explaining the OpenAI processing of str
 The model receives a fixed projection of product identity, enum answers and curated hypothesis evidence. It returns candidate IDs, evidence indexes and uncertainty under a strict JSON schema; server validation additionally rejects missing/duplicate/unknown IDs, invalid indexes and extra properties. Returned evidence/source text is mapped from the existing server catalogue rather than model-authored instructions. This constrains the output but does not prove the ranking correct.
 
 Eligible configured requests share the existing 60-second appliance lookup cooldown with TinyFish and uncached shop searches. The fixed provider endpoint gets one request, a 12-second deadline, at most 800 output tokens and a 64-KiB response cap; no retries. `store:false` disables response-object storage, not every form of provider retention. Tests mock the provider and verify projection, validation, rate limits, refusal, incomplete outputs, errors and timeouts. Missing keys cannot be replaced with a ChatGPT login, Supabase publishable key or TinyFish key.
+
+## Deploy directly from GitHub — no ChatGPT browser sign-in
+
+This is now the preferred connection route. `.github/workflows/supabase-backend.yml` deploys the existing Supabase project `xhkjqtknjwxzbabnirsy` when backend changes reach `main`, or when manually run from `main`. It does not sign in through ChatGPT, create a new project, reset the database or deploy the frontend. This backend workflow is added specifically for the requested repository connection; it does not replace the frontend teammate's Firebase workflow.
+
+One-time setup in YOUR browser:
+
+1. Open your normal signed-in Supabase dashboard. Under your account's Access Tokens, create a token with access to the existing project. This is a management access token, NOT the browser publishable key or service-role key.
+2. In the GitHub repository, open **Settings → Secrets and variables → Actions → New repository secret**.
+3. Add `SUPABASE_ACCESS_TOKEN` containing that management token.
+4. Add `SUPABASE_DB_PASSWORD` containing this existing project's database password. Keep the current password; do not reset it just to proceed.
+5. Add `TINYFISH_API_KEY` containing your TinyFish key. This is needed for successful live reference retrieval, not for the core passport deployment.
+6. Optionally add secret `OPENAI_API_KEY` and Actions variable `OPENAI_MODEL` for the optional AI review. Without these, the rule-based assessment still works and AI review accurately reports not configured.
+7. Once the backend workflow is on `main`, use **Actions → Deploy Supabase backend → Run workflow**, selecting `main`. Subsequent pushes of backend changes to `main` trigger it automatically.
+
+Never paste these secret values into chat, source files, workflow YAML, comments or build logs. This assistant's repository connector cannot write repository Actions secrets; the one-time entry must be done in your browser. The existing browser-safe Supabase project URL/key are already configured in the workflow. No service-role credential is requested.
+
+The workflow runs tests/types first. It uses the official Supabase CLI action, performs a read-only schema/history preflight, links the existing project, shows the migration dry run and applies pending additive migrations. If resource names already exist without the expected migration history, it stops; reconcile the actual schema rather than resetting data or repairing history blindly. It updates only supplied optional provider secrets (missing values preserve existing remote values), sets exact function origins, adds Auth redirects while preserving existing settings, deploys `passport`, `support-lookup`, and `repair-assistant`, and checks the public catalogue and CORS.
+
+The Supabase CLI is selected by the official setup action's latest release. If a future CLI changes flags, update the workflow after inspecting its error; do not bypass failed migration checks. Deployment is serialized and limited to `main`; no pull-request code receives deployment credentials. Credential environment variables are scoped to the steps that need them. The secrets step suppresses CLI output and deletes its temporary secrets file. Two-account checks remain a separate acceptance test and are not implied by the public catalogue check.
+
+Connection status: workflow code prepared, but repository secrets and a successful Actions deployment have NOT been verified. Once a run succeeds, check its actual logs and then complete the two-account smoke test. Firebase/frontend deployment remains separate until the frontend branch is committed and integrated.
