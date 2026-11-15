@@ -31,9 +31,9 @@ Stop on any name collision or existing table/bucket/function with different defi
 ```sh
 supabase login
 supabase link --project-ref "$SUPABASE_PROJECT_REF"
-supabase migration list
-supabase db push --dry-run
-supabase db push
+supabase migration list --remote
+supabase db push --dry-run --remote
+supabase db push --remote
 ```
 
 Read the dry run: this branch supplies exactly one new migration, `202611150001_repairpassport.sql`. Do not use `db reset`, `migration repair`, `--include-all`, `--include-seed` or create/replace resources to bypass drift. No seed is supplied. All migrations run in a transaction.
@@ -183,7 +183,7 @@ This is now the preferred connection route. `.github/workflows/supabase-backend.
 
 One-time setup in YOUR browser:
 
-1. Open your normal signed-in Supabase dashboard. Under your account's Access Tokens, create a token with access to the existing project. This is a management access token, NOT the browser publishable key or service-role key.
+1. Open your normal signed-in Supabase dashboard. Under your account's Access Tokens, create a token scoped to the existing project. Grant Database Read; Project Settings and Auth Config Read-write; API Keys and API Key Secrets Read; Edge Functions and Edge Function Secrets Read-write. This is a management access token, NOT the browser publishable key or service-role key.
 2. In the GitHub repository, open **Settings → Secrets and variables → Actions → New repository secret**.
 3. Add `SUPABASE_ACCESS_TOKEN` containing that management token.
 4. Add `SUPABASE_DB_PASSWORD` containing this existing project's database password. Keep the current password; do not reset it just to proceed.
@@ -195,6 +195,6 @@ Never paste these secret values into chat, source files, workflow YAML, comments
 
 The workflow runs tests/types first. It uses the official Supabase CLI action, performs a read-only schema/history preflight, links the existing project, shows the migration dry run and applies pending additive migrations. If resource names already exist without the expected migration history, it stops; reconcile the actual schema rather than resetting data or repairing history blindly. It updates only supplied optional provider secrets (missing values preserve existing remote values), sets exact function origins, adds Auth redirects while preserving existing settings, deploys `passport`, `support-lookup`, and `repair-assistant`, and checks the public catalogue and CORS.
 
-The Supabase CLI is selected by the official setup action's latest release. If a future CLI changes flags, update the workflow after inspecting its error; do not bypass failed migration checks. Deployment is serialized and limited to `main`; no pull-request code receives deployment credentials. Credential environment variables are scoped to the steps that need them. The secrets step suppresses CLI output and deletes its temporary secrets file. Two-account checks remain a separate acceptance test and are not implied by the public catalogue check.
+The Supabase CLI is pinned to v3.1.0. Hosted database commands explicitly use `--remote`; unattended secret/function changes use `--yes` with the intended project reference. If a future CLI changes flags, update the workflow after inspecting its error; do not bypass failed migration checks. Deployment is serialized and limited to `main`; no pull-request code receives deployment credentials. Credential environment variables are scoped to the steps that need them. The secrets step suppresses CLI output and deletes its temporary secrets file. Two-account checks remain a separate acceptance test and are not implied by the public catalogue check.
 
 Connection status: workflow code prepared, but repository secrets and a successful Actions deployment have NOT been verified. Once a run succeeds, check its actual logs and then complete the two-account smoke test. Firebase/frontend deployment remains separate until the frontend branch is committed and integrated.
