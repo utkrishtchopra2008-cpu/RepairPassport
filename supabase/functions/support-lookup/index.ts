@@ -1,3 +1,4 @@
+import { matchOwnedProduct } from '../_shared/catalog.ts';
 import { authenticate, boundedText, cors, exactKeys, failure, jsonBody, method, object, response, rpc, uuid, type Dependencies } from '../_shared/http.ts';
 
 // No URL, goal, serial number, symptom or prompt supplied by the caller reaches TinyFish.
@@ -22,8 +23,10 @@ export function createHandler(deps: Dependencies) {
       exactKeys(body,['appliance_id']); uuid(body.appliance_id);
       const authorization=await authenticate(req,deps);
       // Includes ownership check and serialized cooldown. No privileged database client.
-      await rpc('claim_support_lookup',{p_appliance_id:body.appliance_id},authorization,deps);
-      const source=approvedSupportUrl(deps.env('MANUFACTURER_SUPPORT_URL'));
+      const context=await rpc('claim_support_lookup',{p_appliance_id:body.appliance_id},authorization,deps);
+      const known=context && typeof context==='object' && 'brand' in context && 'model' in context && typeof context.brand==='string' && typeof context.model==='string'
+        ? matchOwnedProduct({brand:context.brand,model:context.model}):null;
+      const source=approvedSupportUrl(deps.env('MANUFACTURER_SUPPORT_URL') || known?.support_url);
       const key=deps.env('TINYFISH_API_KEY');
       const unavailable=(reason: string)=>response({status:'unavailable',reason,source_url:source},headers!);
       if (!source || !key) return unavailable('not_configured');

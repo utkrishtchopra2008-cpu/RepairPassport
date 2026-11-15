@@ -117,3 +117,50 @@ Manual finish: refresh the frontend and check persistence; generate a buyer QR a
 
 - v1 clarification: HTTP method misuse returns 405; external Auth/DB outages may return 502/503. Same `{error:{code,message}}` format; no schema/action/field changes. Frontend should display the safe message and allow retry. These statuses extend the original listed infrastructure error statuses.
 - Firebase project resolved to existing `repairpassport-utkrisht` from earlier setup. Supabase project/public configuration is now confirmed in the contract. Build-output confirmation, management access and deployed-origin Auth changes remain pending.
+
+## Revised product backend (v2)
+
+The new `repair-assistant` function extends the product without changing the seven-table schema or existing passport actions. Deploy it in addition to both original functions:
+
+```sh
+supabase functions deploy repair-assistant --project-ref xhkjqtknjwxzbabnirsy
+```
+
+The full v2 request/response contract is appended to `docs/backend-contract.md`. Public actions: `list_products`, `resolve_product`, `components`. Owner-only actions: `assess`, `find_shops`. Component IDs are stable for diagram highlighting. Exact first model: Samsung `WW80T504DAN1TL`; a base model without confirmed variant yields `variant_required`. Descriptions/connections are an illustrative subsystem overview, not an exact parts catalogue. Primary references are listed in `supabase/functions/_shared/catalog.ts`; generic manufacturer guidance is distinguished from exact model identity.
+
+Frontend integration sequence:
+
+```js
+// Anonymous catalogue and component information:
+const catalogue = await supabase.functions.invoke('repair-assistant', {
+  body: {action: 'list_products', payload: {}}
+});
+const overview = await supabase.functions.invoke('repair-assistant', {
+  body: {action: 'components', payload: {product_id: 'samsung-ww80t504dan1tl'}}
+});
+// Use the existing passport function to create the selected appliance:
+const created = await supabase.functions.invoke('passport', {
+  body: {action: 'appliance_create', payload: {brand: 'Samsung', model: 'WW80T504DAN1TL'}}
+});
+// invoke returns a Supabase transport wrapper around our response envelope:
+const applianceId = created.data.data.id; // first check created.error and any response error
+const assessment = await supabase.functions.invoke('repair-assistant', {
+  body: {action: 'assess', payload: {
+    appliance_id: applianceId, symptoms: 'Water remains after the cycle', scenario: 'no_drain',
+    answers: {hazard_present: 'no', water_remaining: 'yes', drain_hose_kinked: 'no', filter_condition: 'clear'}
+  }}
+});
+// Render returned questions/options and collect the user's actual observations.
+// To save the original reported problem, submit assessment.data.data.repair_request
+// as payload to passport.request_create. Candidates and answers remain transient.
+```
+
+The assessment engine is `curated_rules_v1`, with `is_ai_generated:false`. It handles drainage, spinning and vibration using real backend rules and follow-up answers; this is not a generative-AI integration. Unknown/ambiguous problems remain unknown. Observed electrical hazards suppress ordinary checks and route to professional help. Manufacturer reference retrieval through TinyFish remains a separate live API integration; it does not prove a diagnosis. A general-purpose LLM and arbitrary-product research are not configured and must not be implied by the frontend.
+
+`support-lookup` now uses the supported model's fixed official Samsung URL if the server override is blank; no need to guess a destination. The existing secret stays server-side. One local live TinyFish Fetch attempt reached its 12-second deadline and a public-demo-area Overpass probe reached its 10-second deadline; the key/provider response has not been independently validated by that attempt. Do not report it as a successful live lookup. Failures remain useful `unavailable` states; there are no automatic retries.
+
+Nearby repair uses OpenStreetMap/Overpass, not invented shop fixtures or TinyFish-generated business claims. Ask the user to explicitly search an approximate area before sending it to Overpass. Raw coordinates are not persisted and are rounded before transmission; distances are calculated server-side. Only explicit repair-brand tags establish listed brand support, and part stock/authorization stay unknown. Lists may legitimately be empty because OSM is incomplete. Show source attribution and the contact-to-confirm notice. No Nominatim/geocoding service or maps API key has been added. Locality input must be resolved through an independently agreed provider or map selection; this backend currently accepts approved coordinates only.
+
+The shared lookup cooldown is per appliance, so manufacturer and uncached shop requests within 60 seconds may conflict. Return the safe rate-limit state; avoid eager parallel requests or background polling. The small in-memory shop cache is only for low-volume demos. Test code checks cached ownership, unknown fields, filtering, distance ordering, malicious contact fields and provider failures. It does not establish production throughput or comprehensive repair coverage.
+
+The updated live smoke script also checks anonymous component retrieval and owner-scoped assessment before and after transfer. It intentionally avoids calling external listing/TinyFish providers in every smoke run. The real two-account hosted script and physical QR checks still need deployed functions and confirmed test accounts.
